@@ -227,7 +227,7 @@ NONRECURSIVE-TRAVERSAL(T)
 
 ---
 
-# 11.1-4：巨大未 初始化数组 的直接寻址实现
+# 11.1-4：巨大 未初始化数组 的直接寻址实现
 
 ## 1. 问题背景
 在处理超大数组（如长度 $m$ 远大于元素个数 $n$）时，系统分配的物理内存往往包含随机的**垃圾数据（Garbage）**。由于数组极大，执行 $O(m)$ 的全量初始化（如 `memset`）在性能上是不可接受的。
@@ -315,4 +315,132 @@ DELETE(T, k)
 * **空间复杂度**：$O(m)$。虽然使用了额外数组，但每个槽位只存储 $O(1)$ 大小的索引或键。
 
 ## 5. 总结
-这个设计的精髓在于**不信任任何未经验证的内存内容**。它利用了“两个互补的随机值几乎不可能形成闭环”的概率学特征（或者说确定性的逻辑验证），实现了在巨大空间内的即时存取。
+这个设计的精髓在于**不信任任何未经验证的内存内容**。它利用了“两个互补的随机值几乎不可能形成闭环”的概率学特征（或者说确定性的逻辑验证），实现了在巨大空间内的即时存取。  
+
+---
+### If collisions are resolved by chaining, search would take $\Theta$(1 + α), where α = n / m.  
+
+---
+
+### **11.2-4**  
+Suggest how to allocate and deallocate storage for elements *within the hash table itself* by creating a **“free list”**: a linked list of all the unused slots.
+
+Assume that one slot can store:
+- a flag, **and**
+- either  
+  (i) one element plus one pointer, or  
+  (ii) two pointers.
+
+All dictionary operations (INSERT, DELETE, SEARCH) and free-list management operations (e.g., `allocate()`, `deallocate()`) should run in $ O(1) $ **expected** time.
+
+> **Question**: Does the free list need to be *doubly linked*, or does a *singly linked* free list suffice?
+
+---
+
+### **11.2-5**  
+You need to store a set of $ n $ keys in a hash table of size $ m $. Show that:
+
+ the keys are drawn from a universe $ U $ with  
+$$
+| 1) \cdot m,
+$$  
+then $ U $ contains a subset of size $ n $ consisting of keys that **all hash to the same slot**, under *any* deterministic hash function $ h : U \to \{0, 1, \dots, m-1\} $.
+
+Consequently, the worst-case searching time for hashing with chaining is $ \Theta(n) $.
+
+*(Hint: Use the pigeonhole principle.)*
+
+---
+
+### **11.2-6**  
+You have stored $ n $ keys in a hash table of size $ m $, with collisions resolved by **chaining**, and you know:
+- the length $ \ell_i $ of each chain $ i $ (for $ i = 0, 1, \dots, m-1 $),
+- in particular, the length $ L = \max_i \ell_i $ of the longest chain.
+
+Let $ \alpha = n/m $ be the load factor.
+
+Describe a procedure that selects a key **uniformly at random** from among the $ n $ keys in the hash table and returns it in expected time  
+$$
+O\!\left(L \cdot \left(1 + \frac{1}{\alpha}\right)\right).
+$$
+
+Your algorithm may preprocess the chain lengths (e.g., build a cumulative array), but the *selection* step must meet the stated expected time bound.  
+没问题，我为你整理了一份结构清晰的 Markdown 笔记。这份笔记涵盖了 **11.2-4** 到 **11.2-6** 的详细解析、数学证明以及复杂度推导。
+
+---
+# 下面是上述3题的解答
+
+## 11.2-4 散列表内的存储管理（Free List）
+
+**题目要求：** 设计一种在散列表数组内部管理空闲空间的方法，要求所有操作（分配、释放）均为 $O(1)$。
+
+### 1. 核心设计
+将散列表的数组 $T$ 视为内存池，每个槽位包含：
+* **Key**：存储的数据。
+* **Next**：指向散列链中下一个元素的指针。
+* **Flag**：标志位，记录该槽位是“已占用”还是“空闲”。
+* **自由表 (Free List)**：将所有 **Flag = 空闲** 的槽位串成一个单链表。
+
+### 2. 操作逻辑
+* **插入 (Insert)**：
+    1. 从 `Free List` 的头部取出一个空闲槽位。
+    2. 将数据填入该槽位，并将其挂载到对应的散列链中。
+* **删除 (Delete)**：
+    1. 将元素从散列链中移除。
+    2. 将该槽位的 `Flag` 标为空闲，并将其插回 `Free List` 的头部。
+
+### 3. 结论
+**单链表足够。** 因为对自由表的操作仅限于“头插”和“头删”，单链表完全能以 $O(1)$ 实现。
+
+
+
+---
+
+## 11.2-5 最坏情况分析（鸽巢原理）
+
+**题目要求：** 证明若全域 $|U| > (n-1)m$，则存在 $n$ 个键哈希到同一个槽位。
+
+### 1. 证明步骤
+1.  **已知条件**：散列表大小为 $m$，待存储键数为 $n$，全域大小为 $|U|$。
+2.  **反证法假设**：假设对于任意槽位 $i$，映射到该槽位的键的数量 $n_i$ 都满足 $n_i \le n-1$。
+3.  **求和分析**：那么全域 $U$ 中所有能被哈希处理的键的总数上限为：
+    $$\sum_{i=0}^{m-1} n_i \le \sum_{i=0}^{m-1} (n-1) = m(n-1)$$
+4.  **矛盾点**：题目给定 $|U| > m(n-1)$。根据**鸽巢原理**，如果我们要将超过 $m(n-1)$ 个键分配到 $m$ 个槽位中，必然至少有一个槽位分配到了至少 $n$ 个键。
+5.  **结论**：在最坏情况下，链接法的搜索时间复杂度为 $\Theta(n)$。
+
+---
+
+## 11.2-6 均匀随机选择元素（拒绝采样法）
+
+**题目要求：** 在已知最大链表长度 $L$ 的情况下，以 $O(L(1 + 1/\alpha))$ 的期望时间随机选出一个键。
+
+### 1. 算法逻辑（投点法）
+在一个大小为 $m \times L$ 的逻辑矩阵中均匀投点：
+1.  **随机采样**：产生随机整数 $i \in [0, m-1]$（选槽位）和 $j \in [1, L]$（选高度）。
+2.  **有效性检查**：
+    * 若 $j \le \text{length}(T[i])$，则返回该链表的第 $j$ 个元素。
+    * 若 $j > \text{length}(T[i])$，则舍弃并重试。
+
+
+
+### 2. 复杂度推导
+设定 $\alpha = n/m$（装载因子）。
+
+* **成功概率 $P$**：
+    $$P = \frac{n}{m \cdot L}$$
+* **期望尝试次数**：
+    $$E[\text{Attempts}] = \frac{1}{P} = \frac{mL}{n} = \frac{L}{n/m} = \frac{L}{\alpha}$$
+* **单次尝试代价**：
+    * 检查长度：$O(1)$。
+    * 成功后定位元素：$O(L)$。
+* **总期望时间 $E[T]$**：
+    $$E[T] \approx (\text{期望失败次数}) \cdot O(1) + 1 \cdot O(L)$$
+    $$E[T] = O\left( \frac{L}{\alpha} + L \right) = O\left( L \left( 1 + \frac{1}{\alpha} \right) \right)$$
+
+### 3. 实例解析
+若 $m=4, n=2, L=2$（2个元素全在同一个槽位）：
+* $\alpha = 0.5$。
+* 逻辑矩阵大小 $4 \times 2 = 8$。其中只有 2 个格子有元素。
+* 成功概率 $P = 2/8 = 1/4$。
+* 平均需要投点 4 次才能命中，命中后遍历链表耗时 $O(L)$。
+* 总耗时正比于 $2 \times (1 + 1/0.5) = 2 \times 3 = 6$。
